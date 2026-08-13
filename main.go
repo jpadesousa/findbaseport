@@ -3,14 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"net"
 	"os"
-	"strconv"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/fang"
 	"github.com/charmbracelet/x/exp/charmtone"
-	"github.com/prometheus/common/version"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -21,7 +20,12 @@ func isPortFree(port uint) bool {
 	if err != nil {
 		return false
 	}
-	l.Close()
+	defer func() {
+		if err := l.Close(); err != nil {
+			log.Printf("failed to close Listener: %v", err)
+		}
+	}()
+
 	return true
 }
 
@@ -31,10 +35,6 @@ func FindAvailablePorts(start, end, count uint) (uint, uint, error) {
 
 	if start > end {
 		err := fmt.Errorf("start port must not exceed end port")
-		return 0, 0, err
-	}
-	if start == 0 {
-		err := fmt.Errorf("start port must be greater than zero")
 		return 0, 0, err
 	}
 	if end == 0 {
@@ -64,14 +64,15 @@ func FindAvailablePorts(start, end, count uint) (uint, uint, error) {
 		}
 	}
 
-	return 0, 0, fmt.Errorf("no contiguous range of %d ports found", count)
+	return 0, 0, fmt.Errorf(
+		"no contiguous range of %d ports found between %d and %d",
+		count, start, end)
 }
 
-// Color and column style variables
+// Color style variables
 var (
-	rangePortStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Bold(true)
-	returnPortStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Bold(true)
-	helpTitleStyle  = lipgloss.NewStyle().Foreground(charmtone.Charple).Bold(true)
+	helpTitleStyle = lipgloss.NewStyle().Foreground(charmtone.Charple).
+		Bold(true)
 )
 
 // Flag variables
@@ -83,6 +84,9 @@ type config struct {
 	}
 }
 
+// Setting the port limit
+var portLimit uint = 65535
+
 var cfg config
 
 func main() {
@@ -92,12 +96,12 @@ func main() {
 
 	// CLI Create a new cobra Command
 	cobraCmd := &cobra.Command{
-		Use: "findcports",
+		Use: "findbaseport",
 		Long: fmt.Sprintf(`%s
 
-Searches within a specified port range and returns the
-start and end ports of the first contiguous block of
-available ports with the requested size.`,
+Searches within a specified port range (inclusive) and returns the
+start port of the first contiguous block of available
+ports with the requested size.`,
 			helpTitleStyle.Render("DESCRIPTION")),
 		RunE: runApp,
 	}
@@ -107,15 +111,15 @@ available ports with the requested size.`,
 	// =============================================
 
 	// ports
-	portsFS.UintVarP(&cfg.ports.start, "start", "s", 20000,
+	portsFS.UintVarP(&cfg.ports.start, "start", "s", 0,
 		"First port in the search range",
 	)
 
-	portsFS.UintVarP(&cfg.ports.end, "end", "e", 20999,
+	portsFS.UintVarP(&cfg.ports.end, "end", "e", portLimit,
 		"Last port in the search range",
 	)
 
-	portsFS.UintVarP(&cfg.ports.count, "count", "c", 10,
+	portsFS.UintVarP(&cfg.ports.count, "count", "c", 0,
 		"Size of the contiguous port block to find",
 	)
 
@@ -128,14 +132,10 @@ available ports with the requested size.`,
 	// Set new flag display settings
 	cobraCmd.Flags().SetInterspersed(false)
 	cobraCmd.Flags().SortFlags = false
-	cobraCmd.Flags().PrintDefaults()
 
 	// Remove completion and help commands (--help is kept)
 	cobraCmd.CompletionOptions.DisableDefaultCmd = true
 	cobraCmd.SetHelpCommand(&cobra.Command{Hidden: true})
-
-	// CLI Version
-	cobraCmd.Version = version.Print("findcports")
 
 	// Execute cobra command
 	if err := fang.Execute(context.Background(), cobraCmd); err != nil {
@@ -143,32 +143,31 @@ available ports with the requested size.`,
 	}
 }
 
-func runApp(cobraCmd *cobra.Command, args []string) error {
+func runApp(cmd *cobra.Command, _ []string) error {
 
-	startPort, endPort, err := FindAvailablePorts(
+	// Check if --count was set with either --start or --end
+	if !cmd.Flags().Changed("count") ||
+		(!cmd.Flags().Changed("start") && !cmd.Flags().Changed("end")) {
+		return fmt.Errorf(
+			"flag --count with either --start or --end is required")
+
+		// Ports cannot exceed a limit
+	} else if cfg.ports.count > portLimit+1 ||
+		cfg.ports.start > portLimit ||
+		cfg.ports.end > portLimit {
+		return fmt.Errorf(
+			"the TCP port number cannot exceed %d", portLimit)
+	}
+
+	startPort, _, err := FindAvailablePorts(
 		cfg.ports.start,
 		cfg.ports.end,
 		cfg.ports.count)
 	if err != nil {
 		return err
+	} else {
+		fmt.Printf("%d\n", startPort)
 	}
 
-	if startPort == endPort {
-		fmt.Printf(
-			"Found the first available port between %s and %s:\n%s\n",
-			rangePortStyle.Render(strconv.FormatUint(uint64(cfg.ports.start), 10)),
-			rangePortStyle.Render(strconv.FormatUint(uint64(cfg.ports.end), 10)),
-			returnPortStyle.Render(strconv.FormatUint(uint64(startPort), 10)),
-		)
-	} else {
-		fmt.Printf(
-			"Found the first available continuous ports between %s and %s:\n%s-%s (%d ports)\n",
-			rangePortStyle.Render(strconv.FormatUint(uint64(cfg.ports.start), 10)),
-			rangePortStyle.Render(strconv.FormatUint(uint64(cfg.ports.end), 10)),
-			returnPortStyle.Render(strconv.FormatUint(uint64(startPort), 10)),
-			returnPortStyle.Render(strconv.FormatUint(uint64(endPort), 10)),
-			cfg.ports.count,
-		)
-	}
 	return nil
 }
