@@ -9,8 +9,8 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    name: Build and release
+  build:
+    name: Build ${{ matrix.name }}
     runs-on: ubuntu-latest
 
     strategy:
@@ -66,31 +66,31 @@ jobs:
             -o "dist/findbaseport-${{ matrix.name }}${{ matrix.extension }}" \
             .
 
-      - name: Upload binary
+      - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: findbaseport-${{ matrix.name }}
           path: dist/findbaseport-${{ matrix.name }}${{ matrix.extension }}
 
-  checksum:
-    name: Generate checksums
-    needs: release
+  release:
+    name: Create release
+    needs: build
     runs-on: ubuntu-latest
 
     steps:
       - name: Download binaries
         uses: actions/download-artifact@v4
         with:
-          path: dist
           pattern: findbaseport-*
+          path: dist
           merge-multiple: true
 
       - name: Generate checksums
+        working-directory: dist
         run: |
-          cd dist
           sha256sum * > checksums.txt
 
-      - name: Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
