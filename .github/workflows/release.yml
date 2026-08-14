@@ -26,26 +26,6 @@ jobs:
             name: linux-arm64
             extension: ""
 
-          - goos: darwin
-            goarch: amd64
-            name: macos-amd64
-            extension: ""
-
-          - goos: darwin
-            goarch: arm64
-            name: macos-arm64
-            extension: ""
-
-          - goos: windows
-            goarch: amd64
-            name: windows-amd64
-            extension: ".exe"
-
-          - goos: windows
-            goarch: arm64
-            name: windows-arm64
-            extension: ".exe"
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -60,10 +40,11 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
+          VERSION: ${{ github.ref_name }}
         run: |
           mkdir -p dist
           go build \
-            -ldflags="-X main.version=${{ github.ref_name }}" \
+            -ldflags="-X main.version=${VERSION}" \
             -o "dist/findbaseport-${{ matrix.name }}${{ matrix.extension }}" \
             .
 

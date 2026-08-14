@@ -1,5 +1,4 @@
 BINARY := findbaseport 
-VERSION := dev
 
 .PHONY: all fmt vet lint build clean
 
