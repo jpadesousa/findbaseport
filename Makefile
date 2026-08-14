@@ -1,4 +1,5 @@
 BINARY := findbaseport 
+VERSION := dev
 
 .PHONY: all fmt vet lint build clean
 
@@ -15,7 +16,7 @@ lint:
 
 build:
 	mkdir -p bin
-	go build -o bin/$(BINARY)
+	go build -ldflags="-X main.version=$(VERSION)" -o bin/$(BINARY)
 
 clean:
 	rm -rf bin/

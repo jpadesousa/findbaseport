@@ -69,6 +69,9 @@ func FindAvailablePorts(start, end, count uint) (uint, uint, error) {
 		count, start, end)
 }
 
+// Set version
+var version = "dev"
+
 // Color style variables
 var (
 	helpTitleStyle = lipgloss.NewStyle().Foreground(charmtone.Charple).
@@ -138,7 +141,10 @@ ports with the requested size.`,
 	cobraCmd.SetHelpCommand(&cobra.Command{Hidden: true})
 
 	// Execute cobra command
-	if err := fang.Execute(context.Background(), cobraCmd); err != nil {
+	if err := fang.Execute(
+		context.Background(),
+		cobraCmd,
+		fang.WithVersion(version)); err != nil {
 		os.Exit(1)
 	}
 }
