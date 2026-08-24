@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"net"
 	"os"
 
@@ -15,7 +16,7 @@ import (
 )
 
 // isPortFree checks if a port is free by temporarily binding to it
-func isPortFree(port uint) bool {
+func isPortFree(port uint16) bool {
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return false
@@ -31,7 +32,7 @@ func isPortFree(port uint) bool {
 
 // FindAvailablePorts finds the first contiguous block of `count` free ports
 // within [start, end] (inclusive) and returns the start and end ports.
-func FindAvailablePorts(start, end, count uint) (uint, uint, error) {
+func FindAvailablePorts(start, end, count uint16) (uint16, uint16, error) {
 
 	if start > end {
 		err := fmt.Errorf("start port must not exceed end port")
@@ -46,8 +47,8 @@ func FindAvailablePorts(start, end, count uint) (uint, uint, error) {
 		return 0, 0, err
 	}
 
-	var runStart uint
-	var runLength uint = 0
+	var runStart uint16
+	var runLength uint16 = 0
 
 	for p := start; p <= end; p++ {
 		if isPortFree(p) {
@@ -81,14 +82,14 @@ var (
 // Flag variables
 type config struct {
 	ports struct {
-		start uint
-		end   uint
-		count uint
+		start uint16
+		end   uint16
+		count uint16
 	}
 }
 
 // Setting the port limit
-var portLimit uint = 65535
+var portLimit uint16 = math.MaxUint16
 
 var cfg config
 
@@ -114,15 +115,15 @@ ports with the requested size.`,
 	// =============================================
 
 	// ports
-	portsFS.UintVarP(&cfg.ports.start, "start", "s", 0,
+	portsFS.Uint16VarP(&cfg.ports.start, "start", "s", 0,
 		"First port in the search range",
 	)
 
-	portsFS.UintVarP(&cfg.ports.end, "end", "e", portLimit,
+	portsFS.Uint16VarP(&cfg.ports.end, "end", "e", portLimit,
 		"Last port in the search range",
 	)
 
-	portsFS.UintVarP(&cfg.ports.count, "count", "c", 0,
+	portsFS.Uint16VarP(&cfg.ports.count, "count", "c", 0,
 		"Size of the contiguous port block to find",
 	)
 
@@ -156,13 +157,6 @@ func runApp(cmd *cobra.Command, _ []string) error {
 		(!cmd.Flags().Changed("start") && !cmd.Flags().Changed("end")) {
 		return fmt.Errorf(
 			"flag --count with either --start or --end is required")
-
-		// Ports cannot exceed a limit
-	} else if cfg.ports.count > portLimit+1 ||
-		cfg.ports.start > portLimit ||
-		cfg.ports.end > portLimit {
-		return fmt.Errorf(
-			"the TCP port number cannot exceed %d", portLimit)
 	}
 
 	startPort, _, err := FindAvailablePorts(
